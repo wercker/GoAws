@@ -9,9 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"log"
+
 	"github.com/gorilla/mux"
 	"github.com/p4tin/goaws/common"
-	"log"
 )
 
 type SqsErrorType struct {
@@ -33,11 +34,16 @@ type Message struct {
 }
 
 type Queue struct {
-	Name        string
-	URL         string
-	Arn         string
-	TimeoutSecs int
-	Messages    []Message
+	Name                          string
+	URL                           string
+	Arn                           string
+	TimeoutSecs                   int
+	DelaySeconds                  int
+	MaximiumMessageSize           int
+	MessageRetentionPeriod        int
+	ReceiveMessageWaitTimeSeconds int
+	VisibilityTimeout             int
+	Messages                      []Message
 }
 
 var SyncQueues = struct {
@@ -164,11 +170,11 @@ func ReceiveMessage(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var message []*ResultMessage
-//	respMsg := ResultMessage{}
+	//	respMsg := ResultMessage{}
 	respStruct := ReceiveMessageResponse{}
 
 	loops := waitTimeSeconds * 10
-	for len(SyncQueues.Queues[queueName].Messages) - numberOfHiddenMessagesInQueue(*SyncQueues.Queues[queueName]) == 0 && loops > 0 {
+	for len(SyncQueues.Queues[queueName].Messages)-numberOfHiddenMessagesInQueue(*SyncQueues.Queues[queueName]) == 0 && loops > 0 {
 		time.Sleep(100 * time.Millisecond)
 		loops--
 	}
@@ -199,7 +205,7 @@ func ReceiveMessage(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-//		respMsg = ResultMessage{MessageId: message.Uuid, ReceiptHandle: message.ReceiptHandle, MD5OfBody: message.MD5OfMessageBody, Body: message.MessageBody, MD5OfMessageAttributes: message.MD5OfMessageAttributes}
+		//		respMsg = ResultMessage{MessageId: message.Uuid, ReceiptHandle: message.ReceiptHandle, MD5OfBody: message.MD5OfMessageBody, Body: message.MessageBody, MD5OfMessageAttributes: message.MD5OfMessageAttributes}
 		respStruct = ReceiveMessageResponse{"http://queue.amazonaws.com/doc/2012-11-05/", ReceiveMessageResult{Message: message}, ResponseMetadata{RequestId: "00000000-0000-0000-0000-000000000000"}}
 	} else {
 		log.Println("No messages in Queue:", queueName)
@@ -211,7 +217,6 @@ func ReceiveMessage(w http.ResponseWriter, req *http.Request) {
 		fmt.Printf("error: %v\n", err)
 	}
 }
-
 
 func numberOfHiddenMessagesInQueue(queue Queue) int {
 	num := 0
@@ -354,6 +359,53 @@ func GetQueueUrl(w http.ResponseWriter, req *http.Request) {
 		createErrorResponse(w, req, "QueueNotFound")
 	}
 	SyncQueues.RUnlock()
+}
+
+func SetQueueAttributes(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/xml")
+
+	// Get queue url, name
+	queueUrl := req.FormValue("QueueUrl")
+	queueName := ""
+	if queueUrl == "" {
+		vars := mux.Vars(req)
+		queueName = vars["queueName"]
+	} else {
+		uriSegments := strings.Split(queueUrl, "/")
+		queueName = uriSegments[len(uriSegments)-1]
+	}
+
+	// Get queue by name
+	if queue, ok := SyncQueues.Queues[queueName]; ok {
+		SyncQueues.Lock()
+
+		val, err := strconv.Atoi(req.FormValue("DelaySeconds"))
+		if err == nil {
+			queue.DelaySeconds = val
+		}
+
+		val, err = strconv.Atoi(req.FormValue("MaximiumMessageSize"))
+		if err == nil {
+			queue.MaximiumMessageSize = val
+		}
+
+		val, err = strconv.Atoi(req.FormValue("MessageRetentionPeriod"))
+		if err == nil {
+			queue.MessageRetentionPeriod = val
+		}
+
+		val, err = strconv.Atoi(req.FormValue("ReceiveMessageWaitTimeSeconds"))
+		if err == nil {
+			queue.ReceiveMessageWaitTimeSeconds = val
+		}
+
+		val, err = strconv.Atoi(req.FormValue("VisibilityTimeout"))
+		if err == nil {
+			queue.VisibilityTimeout = val
+		}
+
+		SyncQueues.Unlock()
+	}
 }
 
 func GetQueueAttributes(w http.ResponseWriter, req *http.Request) {

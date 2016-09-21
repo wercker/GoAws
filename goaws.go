@@ -2,15 +2,16 @@ package main
 
 import (
 	"flag"
-	"github.com/gorilla/mux"
 	"io"
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/gorilla/mux"
+
+	"github.com/p4tin/goaws/conf"
 	sns "github.com/p4tin/goaws/gosns"
 	sqs "github.com/p4tin/goaws/gosqs"
-	"github.com/p4tin/goaws/conf"
 )
 
 func BadRequest(w http.ResponseWriter, req *http.Request) {
@@ -29,6 +30,8 @@ func IndexServer(w http.ResponseWriter, req *http.Request) {
 		sqs.CreateQueue(w, req)
 	case "GetQueueAttributes":
 		sqs.GetQueueAttributes(w, req)
+	case "SetQueueAttributes":
+		sqs.SetQueueAttributes(w, req)
 	case "SendMessage":
 		sqs.SendMessage(w, req)
 	case "ReceiveMessage":
@@ -88,16 +91,16 @@ func main() {
 
 	if len(portNumbers) == 1 {
 		log.Printf("GoAws listening on: 0.0.0.0:%s\n", portNumbers[0])
-		err := http.ListenAndServe("0.0.0.0:" + portNumbers[0], r)
+		err := http.ListenAndServe("0.0.0.0:"+portNumbers[0], r)
 		log.Fatal(err)
 	} else if len(portNumbers) == 2 {
 		go func() {
 			log.Printf("GoAws listening on: 0.0.0.0:%s\n", portNumbers[0])
-			err := http.ListenAndServe("0.0.0.0:" + portNumbers[0], r)
+			err := http.ListenAndServe("0.0.0.0:"+portNumbers[0], r)
 			log.Fatal(err)
 		}()
 		log.Printf("GoAws listening on: 0.0.0.0:%s\n", portNumbers[1])
-		err := http.ListenAndServe("0.0.0.0:" + portNumbers[1], r)
+		err := http.ListenAndServe("0.0.0.0:"+portNumbers[1], r)
 		log.Fatal(err)
 	} else {
 		log.Fatal("Not enough or too many ports defined to start GoAws.")

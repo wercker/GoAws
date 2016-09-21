@@ -1,0 +1,58 @@
+box: golang:1.6
+
+build:
+  base-path: /go/src/github.com/p4tin/goaws
+  steps:
+    - script:
+        name: install govendor
+        code: go get -u github.com/kardianos/govendor
+
+    - script:
+        name: force "go get" over ssh
+        code: git config --global url."git@github.com:".insteadOf "https://github.com/"
+
+    - add-to-known_hosts:
+        hostname: github.com
+        fingerprint: 16:27:ac:a5:76:28:2d:36:63:1b:56:4d:eb:df:a6:48
+        type: rsa
+
+    - script:
+        name: install dependencies
+        code: govendor sync
+
+    - script:
+        name: go test
+        code: govendor test -cover +local
+
+    - script:
+        name: go build
+        code: |
+          CGO_ENABLED=0 \
+            go build \
+            -installsuffix cgo \
+            -o $WERCKER_OUTPUT_DIR/goaws
+
+push-quay:
+  box:
+    id: alpine
+    cmd: /bin/sh
+  steps:
+    - script:
+        name: install apk packages
+        code: |
+          echo "@edge http://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories
+          apk update && apk add ca-certificates
+
+    - script:
+        name: prepare
+        code: mv ./goaws /goaws
+
+    - internal/docker-push:
+        repository: quay.io/wercker/goaws
+        registry: https://quay.io
+        username: $DOCKER_USERNAME
+        password: $DOCKER_PASSWORD
+        tag: $WERCKER_GIT_BRANCH-$WERCKER_GIT_COMMIT
+        entrypoint: /goaws
+        ports: 4100
+

@@ -2,6 +2,7 @@
 
 goaws
 goaws_linux_amd64
+.wercker
 
 venv/
 logs/
